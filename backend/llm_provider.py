@@ -143,7 +143,7 @@ def build_llm() -> FallbackLLM:
         from langchain_ollama import ChatOllama  # noqa: PLC0415
 
         ollama_host = os.getenv("OLLAMA_HOST", "http://localhost:11434")
-        ollama_model = os.getenv("OLLAMA_MODEL", "gpt-oss:20b-cloud")
+        ollama_model = os.getenv("OLLAMA_MODEL", "gpt-oss:120b-cloud")
 
         providers.append(ChatOllama(model=ollama_model, base_url=ollama_host))
         names.append(f"{ollama_model} (Ollama)")
