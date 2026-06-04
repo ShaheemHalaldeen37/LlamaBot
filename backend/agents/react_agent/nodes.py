@@ -1,7 +1,15 @@
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_core.tools import tool
 from dotenv import load_dotenv
+import os
 load_dotenv()
+
+# Resolve paths relative to the project root (two levels up from this file)
+_PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../.."))
+_PAGE_HTML = os.path.join(_PROJECT_ROOT, "page.html")
+_PAGE_CSS  = os.path.join(_PROJECT_ROOT, "assets", "page.css")
+_PAGE_JS   = os.path.join(_PROJECT_ROOT, "assets", "page.js")
+_SCREENSHOT = os.path.join(_PROJECT_ROOT, "assets", "screenshot-of-page-to-clone.png")
 
 from langgraph.graph import MessagesState
 from langchain_core.messages import HumanMessage, SystemMessage, AIMessage
@@ -21,7 +29,7 @@ def write_html(html_code: str) -> str:
     """
     Write HTML code to a file.
     """
-    with open("/Users/kodykendall/SoftEngineering/LLMPress/Simple/LlamaBotSimple/page.html", "w") as f:
+    with open(_PAGE_HTML, "w") as f:
         f.write(html_code)
     return "HTML code written to page.html"
 
@@ -30,7 +38,7 @@ def write_css(css_code: str) -> str:
     """
     Write CSS code to a file.
     """
-    with open("/Users/kodykendall/SoftEngineering/LLMPress/Simple/LlamaBotSimple/assets/page.css", "w") as f:
+    with open(_PAGE_CSS, "w") as f:
         f.write(css_code)
     return "CSS code written to page.css"
 
@@ -39,7 +47,7 @@ def write_javascript(javascript_code: str) -> str:
     """
     Write JavaScript code to a file.
     """
-    with open("/Users/kodykendall/SoftEngineering/LLMPress/Simple/LlamaBotSimple/assets/page.js", "w") as f:
+    with open(_PAGE_JS, "w") as f:
         f.write(javascript_code)
     return "JavaScript code written to page.js"
 
@@ -49,12 +57,12 @@ def get_screenshot_and_html_content_using_playwright(url: str) -> tuple[str, lis
     """
     Get the screenshot and HTML content of a webpage using Playwright. Then, generate the HTML as a clone, and save it to the file system. 
     """
-    trimmed_html_content, image_sources = asyncio.run(capture_page_and_img_src(url, "assets/screenshot-of-page-to-clone.png"))
+    trimmed_html_content, image_sources = asyncio.run(capture_page_and_img_src(url, _SCREENSHOT))
 
     llm = ChatGoogleGenerativeAI(model="gemini-2.5-flash")
 
     # Getting the Base64 string
-    base64_image = encode_image("assets/screenshot-of-page-to-clone.png")
+    base64_image = encode_image(_SCREENSHOT)
 
     print(f"Making our call to gemini-2.5-flash vision right now")
     
@@ -102,9 +110,9 @@ No extra markdown, no explanations, no leading or trailing whitespace outside th
         ])
     ])
 
-    with open("/Users/kodykendall/SoftEngineering/LLMPress/Simple/LlamaBotSimple/page.html", "w") as f:
+    with open(_PAGE_HTML, "w") as f:
         f.write(response.content)
-    
+
     return "Cloned webpage written to file"
 
 # Global tools list

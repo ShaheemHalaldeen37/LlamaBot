@@ -10,7 +10,7 @@ from agents.write_html_agent.route_initial_user_message import route_initial_use
 from agents.write_html_agent.respond_naturally import respond_naturally_node
 from agents.write_html_agent.design_and_plan import design_and_plan_node
 from agents.write_html_agent.write_html_code import write_html_code_node
-from langchain.schema import HumanMessage
+from langchain_core.messages import HumanMessage
 
 from agents.write_html_agent.state import State
 

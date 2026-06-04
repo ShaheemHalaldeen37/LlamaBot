@@ -3,11 +3,14 @@ from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from langchain_google_genai import ChatGoogleGenerativeAI
-from langchain.schema import HumanMessage
+from langchain_core.messages import HumanMessage
 from pydantic import BaseModel
 from dotenv import load_dotenv
 import os
 import logging
+
+_PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+_PAGE_HTML = os.path.join(_PROJECT_ROOT, "page.html")
 import time
 import json
 from datetime import datetime
@@ -96,7 +99,7 @@ async def chat_message(chat_message: ChatMessage):
     
     # Get the existing HTML content from page.html
     try:
-        with open("../page.html", "r") as f:
+        with open(_PAGE_HTML, "r") as f:
             existing_html_content = f.read()
     except FileNotFoundError:
         existing_html_content = ""
@@ -205,7 +208,7 @@ async def chat():
 
 @app.get("/page", response_class=HTMLResponse)
 async def page():
-    with open("../page.html") as f:
+    with open(_PAGE_HTML) as f:
         return f.read()
     
 @app.get("/conversations", response_class=HTMLResponse)

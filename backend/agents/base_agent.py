@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
 
 from langchain_google_genai import ChatGoogleGenerativeAI
-from langchain.schema import HumanMessage
+from langchain_core.messages import HumanMessage
 from dotenv import load_dotenv
 
 class BaseAgent(ABC):

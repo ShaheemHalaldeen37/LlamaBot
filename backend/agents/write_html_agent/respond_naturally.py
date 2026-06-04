@@ -3,7 +3,7 @@ from langsmith import Client
 import os
 from langchain import hub
 from agents.write_html_agent.state import State
-from langchain.schema import HumanMessage
+from langchain_core.messages import HumanMessage
 
 class RespondNaturally(BaseAgent):
     def __init__(self):
