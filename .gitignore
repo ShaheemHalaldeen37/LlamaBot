@@ -6,3 +6,4 @@ chat_app.log
 frontend/node_modules
 .venv
 *.html
+assets/

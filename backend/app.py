@@ -38,10 +38,14 @@ load_dotenv()
 
 app = FastAPI()
 
-# Add CORS middleware for React frontend
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3001", "http://127.0.0.1:3001"],  # React dev server
+    allow_origins=[
+        "http://localhost:8000",
+        "http://127.0.0.1:8000",
+        "http://localhost:3001",
+        "http://127.0.0.1:3001",
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -49,6 +53,7 @@ app.add_middleware(
 
 # Mount static directories
 app.mount("/assets", StaticFiles(directory="../assets"), name="assets")
+app.mount("/examples", StaticFiles(directory="../examples"), name="examples")
 
 # Initialize the Gemini client
 llm = ChatGoogleGenerativeAI(
