@@ -2,7 +2,7 @@ from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
-from langchain_openai import ChatOpenAI
+from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain.schema import HumanMessage
 from pydantic import BaseModel
 from dotenv import load_dotenv
@@ -47,9 +47,9 @@ app.add_middleware(
 # Mount static directories
 app.mount("/assets", StaticFiles(directory="../assets"), name="assets")
 
-# Initialize the ChatOpenAI client
-llm = ChatOpenAI(
-    model="o4-mini-2025-04-16"
+# Initialize the Gemini client
+llm = ChatGoogleGenerativeAI(
+    model="gemini-2.5-flash"
 )
 
 client = Client(api_key=os.getenv("LANGSMITH_API_KEY"))

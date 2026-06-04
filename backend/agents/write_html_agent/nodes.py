@@ -1,6 +1,6 @@
 from typing import Annotated
 
-from langchain_openai import ChatOpenAI
+from langchain_google_genai import ChatGoogleGenerativeAI
 from typing_extensions import TypedDict
 
 from langgraph.graph import StateGraph, START
@@ -21,7 +21,7 @@ load_dotenv()
 def build_workflow():
     graph_builder = StateGraph(State)
 
-    llm = ChatOpenAI(model="o4-mini")
+    llm = ChatGoogleGenerativeAI(model="gemini-2.5-flash")
 
     # The first argument is the unique node name
     # The second argument is the function or object that will be called whenever

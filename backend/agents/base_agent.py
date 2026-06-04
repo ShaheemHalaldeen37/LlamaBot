@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
 
-from langchain_openai import ChatOpenAI
+from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain.schema import HumanMessage
 from dotenv import load_dotenv
 
@@ -10,7 +10,7 @@ class BaseAgent(ABC):
         self.description = description
 
         load_dotenv()
-        self.llm = ChatOpenAI(model="o4-mini")
+        self.llm = ChatGoogleGenerativeAI(model="gemini-2.5-flash")
 
     @abstractmethod
     def run(self, input: str) -> str:

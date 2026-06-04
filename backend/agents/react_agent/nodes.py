@@ -1,4 +1,4 @@
-from langchain_openai import ChatOpenAI
+from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_core.tools import tool
 from dotenv import load_dotenv
 load_dotenv()
@@ -14,7 +14,6 @@ import asyncio
 
 from agents.utils.playwright_screenshot import capture_page_and_img_src
 
-from openai import OpenAI
 from agents.utils.images import encode_image
 
 @tool
@@ -52,12 +51,12 @@ def get_screenshot_and_html_content_using_playwright(url: str) -> tuple[str, lis
     """
     trimmed_html_content, image_sources = asyncio.run(capture_page_and_img_src(url, "assets/screenshot-of-page-to-clone.png"))
 
-    llm = ChatOpenAI(model="o3")
+    llm = ChatGoogleGenerativeAI(model="gemini-2.5-flash")
 
     # Getting the Base64 string
     base64_image = encode_image("assets/screenshot-of-page-to-clone.png")
 
-    print(f"Making our call to o3 vision right now")
+    print(f"Making our call to gemini-2.5-flash vision right now")
     
     response = llm.invoke([
         SystemMessage(content="""
@@ -116,7 +115,7 @@ sys_msg = SystemMessage(content="You are a helpful software_developer_assistant 
 
 # Node
 def software_developer_assistant(state: MessagesState):
-   llm = ChatOpenAI(model="o4-mini")
+   llm = ChatGoogleGenerativeAI(model="gemini-2.5-flash")
    llm_with_tools = llm.bind_tools(tools)
    return {"messages": [llm_with_tools.invoke([sys_msg] + state["messages"])]}
 
