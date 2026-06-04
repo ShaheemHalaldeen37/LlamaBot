@@ -2,7 +2,6 @@ from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
-from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_core.messages import HumanMessage
 from pydantic import BaseModel
 from dotenv import load_dotenv
@@ -20,6 +19,7 @@ from langgraph.checkpoint.memory import MemorySaver
 from langgraph.checkpoint.base import CheckpointTuple
 from psycopg_pool import ConnectionPool
 from run_logger import RunLogger
+from llm_provider import build_llm
 
 # Configure logging
 logging.basicConfig(
@@ -54,10 +54,8 @@ app.add_middleware(
 app.mount("/assets", StaticFiles(directory="../assets"), name="assets")
 app.mount("/examples", StaticFiles(directory="../examples"), name="examples")
 
-# Initialize the Gemini client
-llm = ChatGoogleGenerativeAI(
-    model="gemini-2.5-flash"
-)
+# Initialize the LLM provider chain (gpt-oss → gemini fallback)
+llm = build_llm()
 
 # Pydantic model for chat request
 class ChatMessage(BaseModel):

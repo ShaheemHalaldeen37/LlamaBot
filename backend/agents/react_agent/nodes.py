@@ -1,4 +1,3 @@
-from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_core.tools import tool
 from langchain_core.runnables import RunnableConfig
 from dotenv import load_dotenv
@@ -8,9 +7,10 @@ import logging
 
 load_dotenv()
 
-# Add backend root to path so run_logger is importable from node context
+# Add backend root to path so run_logger / llm_provider are importable from node context
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
 import run_logger as _run_logger_module
+from llm_provider import build_llm
 
 _node_logger = logging.getLogger(__name__)
 
@@ -69,12 +69,12 @@ def get_screenshot_and_html_content_using_playwright(url: str) -> tuple[str, lis
     """
     trimmed_html_content, image_sources = asyncio.run(capture_page_and_img_src(url, _SCREENSHOT))
 
-    llm = ChatGoogleGenerativeAI(model="gemini-2.5-flash")
+    llm = build_llm()
 
     # Getting the Base64 string
     base64_image = encode_image(_SCREENSHOT)
 
-    print(f"Making our call to gemini-2.5-flash vision right now")
+    _node_logger.info("Calling vision LLM to clone webpage")
     
     response = llm.invoke([
         SystemMessage(content="""
@@ -133,7 +133,7 @@ sys_msg = SystemMessage(content="You are a helpful software_developer_assistant 
 
 # Node
 def software_developer_assistant(state: MessagesState, config: RunnableConfig = None):
-    llm = ChatGoogleGenerativeAI(model="gemini-2.5-flash")
+    llm = build_llm()
     llm_with_tools = llm.bind_tools(tools)
 
     input_messages = [sys_msg] + state["messages"]
