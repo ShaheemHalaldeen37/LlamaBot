@@ -3,6 +3,7 @@ from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from langchain_core.messages import HumanMessage
+from langchain_core.messages import messages_to_dict
 from pydantic import BaseModel
 from dotenv import load_dotenv
 import os
@@ -198,11 +199,14 @@ async def chat_message(chat_message: ChatMessage):
             run_log.log_completion()
             run_log.close()
             logger.info(f"[{request_id}] Stream completed. Log → {run_log.log_path}")
+            serializable_messages = messages_to_dict(
+                final_state.get("messages", []) if final_state else []
+            )
             yield json.dumps({
                 "type": "final",
                 "node": "final",
                 "value": "final",
-                "messages": final_state.get("messages", []) if final_state else [],
+                "messages": serializable_messages,
             }) + "\n"
 
     # Return a streaming response
