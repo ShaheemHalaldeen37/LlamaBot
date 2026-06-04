@@ -1,8 +1,18 @@
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_core.tools import tool
+from langchain_core.runnables import RunnableConfig
 from dotenv import load_dotenv
 import os
+import sys
+import logging
+
 load_dotenv()
+
+# Add backend root to path so run_logger is importable from node context
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
+import run_logger as _run_logger_module
+
+_node_logger = logging.getLogger(__name__)
 
 # Resolve paths relative to the project root (two levels up from this file)
 _PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../.."))
@@ -122,10 +132,26 @@ tools = [write_html, write_css, write_javascript, get_screenshot_and_html_conten
 sys_msg = SystemMessage(content="You are a helpful software_developer_assistant tasked with writing HTML, CSS, and JavaScript code to files. HTML is always written first, then CSS, then JavaScript. CSS will be written to assets/page.css and JavaScript will be written to assets/page.js, reference them accordingly in your generated code. If you are cloning a webpage, you will just write the final output directly into the single HTML page including the CSS and JavaScript in that single file.")
 
 # Node
-def software_developer_assistant(state: MessagesState):
-   llm = ChatGoogleGenerativeAI(model="gemini-2.5-flash")
-   llm_with_tools = llm.bind_tools(tools)
-   return {"messages": [llm_with_tools.invoke([sys_msg] + state["messages"])]}
+def software_developer_assistant(state: MessagesState, config: RunnableConfig = None):
+    llm = ChatGoogleGenerativeAI(model="gemini-2.5-flash")
+    llm_with_tools = llm.bind_tools(tools)
+
+    input_messages = [sys_msg] + state["messages"]
+
+    # Log LLM input via run logger if one is active for this request
+    request_id = (config or {}).get("configurable", {}).get("request_id")
+    run_log = _run_logger_module.get(request_id) if request_id else None
+    if run_log:
+        run_log.log_llm_input(input_messages)
+    else:
+        _node_logger.info(f"LLM input: {len(input_messages)} messages (no run logger active)")
+
+    response = llm_with_tools.invoke(input_messages)
+
+    if run_log:
+        _node_logger.info(f"[{request_id}] LLM responded — logging output")
+
+    return {"messages": [response]}
 
 def build_workflow(checkpointer=None):
     # Graph
