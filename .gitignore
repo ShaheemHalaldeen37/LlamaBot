@@ -8,3 +8,4 @@ frontend/node_modules
 *.html
 assets/
 backend/logs
+*.ipynb
