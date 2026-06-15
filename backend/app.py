@@ -9,8 +9,8 @@ from dotenv import load_dotenv
 import os
 import logging
 
-_PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
-_PAGE_HTML = os.path.join(_PROJECT_ROOT, "page.html")
+_PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..")) #Project root LLAMABOT
+_PAGE_HTML = os.path.join(_PROJECT_ROOT, "page.html")#LLAMABOT/page.html
 import time
 import json
 from datetime import datetime

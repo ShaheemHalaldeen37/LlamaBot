@@ -4,6 +4,7 @@ from dotenv import load_dotenv
 import os
 import sys
 import logging
+import time
 
 load_dotenv()
 
@@ -129,7 +130,12 @@ No extra markdown, no explanations, no leading or trailing whitespace outside th
 tools = [write_html, write_css, write_javascript, get_screenshot_and_html_content_using_playwright]
 
 # System message
-sys_msg = SystemMessage(content="You are a helpful software_developer_assistant tasked with writing HTML, CSS, and JavaScript code to files. HTML is always written first, then CSS, then JavaScript. CSS will be written to assets/page.css and JavaScript will be written to assets/page.js, reference them accordingly in your generated code. If you are cloning a webpage, you will just write the final output directly into the single HTML page including the CSS and JavaScript in that single file.")
+sys_msg = SystemMessage(content="You are a helpful software_developer_assistant tasked with writing " \
+"HTML, CSS, and JavaScript code to files. HTML is always written first, then CSS, then JavaScript. " \
+"CSS will be written to assets/page.css and JavaScript will be written to assets/page.js, " \
+"reference them accordingly in your generated code. If you are cloning a webpage, " \
+"you will just write the final output directly into the single HTML page including " \
+"the CSS and JavaScript in that single file.")
 
 # Node
 def software_developer_assistant(state: MessagesState, config: RunnableConfig = None):
@@ -146,6 +152,7 @@ def software_developer_assistant(state: MessagesState, config: RunnableConfig = 
     else:
         _node_logger.info(f"LLM input: {len(input_messages)} messages (no run logger active)")
 
+    time.sleep(20)
     response = llm_with_tools.invoke(input_messages)
 
     if run_log:
