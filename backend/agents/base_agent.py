@@ -1,8 +1,11 @@
 from abc import ABC, abstractmethod
+import sys, os
 
-from langchain_openai import ChatOpenAI
-from langchain.schema import HumanMessage
+from langchain_core.messages import HumanMessage
 from dotenv import load_dotenv
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
+from llm_provider import build_llm
 
 class BaseAgent(ABC):
     def __init__(self, name: str, description: str):
@@ -10,7 +13,7 @@ class BaseAgent(ABC):
         self.description = description
 
         load_dotenv()
-        self.llm = ChatOpenAI(model="o4-mini")
+        self.llm = build_llm()
 
     @abstractmethod
     def run(self, input: str) -> str:

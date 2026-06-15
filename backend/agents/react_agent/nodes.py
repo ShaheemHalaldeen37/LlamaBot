@@ -1,7 +1,26 @@
-from langchain_openai import ChatOpenAI
 from langchain_core.tools import tool
+from langchain_core.runnables import RunnableConfig
 from dotenv import load_dotenv
+import os
+import sys
+import logging
+import time
+
 load_dotenv()
+
+# Add backend root to path so run_logger / llm_provider are importable from node context
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
+import run_logger as _run_logger_module
+from llm_provider import build_llm
+
+_node_logger = logging.getLogger(__name__)
+
+# Resolve paths relative to the project root (two levels up from this file)
+_PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../.."))
+_PAGE_HTML = os.path.join(_PROJECT_ROOT, "page.html")
+_PAGE_CSS  = os.path.join(_PROJECT_ROOT, "assets", "page.css")
+_PAGE_JS   = os.path.join(_PROJECT_ROOT, "assets", "page.js")
+_SCREENSHOT = os.path.join(_PROJECT_ROOT, "assets", "screenshot-of-page-to-clone.png")
 
 from langgraph.graph import MessagesState
 from langchain_core.messages import HumanMessage, SystemMessage, AIMessage
@@ -14,7 +33,6 @@ import asyncio
 
 from agents.utils.playwright_screenshot import capture_page_and_img_src
 
-from openai import OpenAI
 from agents.utils.images import encode_image
 
 @tool
@@ -22,7 +40,7 @@ def write_html(html_code: str) -> str:
     """
     Write HTML code to a file.
     """
-    with open("/Users/kodykendall/SoftEngineering/LLMPress/Simple/LlamaBotSimple/page.html", "w") as f:
+    with open(_PAGE_HTML, "w") as f:
         f.write(html_code)
     return "HTML code written to page.html"
 
@@ -31,7 +49,7 @@ def write_css(css_code: str) -> str:
     """
     Write CSS code to a file.
     """
-    with open("/Users/kodykendall/SoftEngineering/LLMPress/Simple/LlamaBotSimple/assets/page.css", "w") as f:
+    with open(_PAGE_CSS, "w") as f:
         f.write(css_code)
     return "CSS code written to page.css"
 
@@ -40,7 +58,7 @@ def write_javascript(javascript_code: str) -> str:
     """
     Write JavaScript code to a file.
     """
-    with open("/Users/kodykendall/SoftEngineering/LLMPress/Simple/LlamaBotSimple/assets/page.js", "w") as f:
+    with open(_PAGE_JS, "w") as f:
         f.write(javascript_code)
     return "JavaScript code written to page.js"
 
@@ -50,14 +68,14 @@ def get_screenshot_and_html_content_using_playwright(url: str) -> tuple[str, lis
     """
     Get the screenshot and HTML content of a webpage using Playwright. Then, generate the HTML as a clone, and save it to the file system. 
     """
-    trimmed_html_content, image_sources = asyncio.run(capture_page_and_img_src(url, "assets/screenshot-of-page-to-clone.png"))
+    trimmed_html_content, image_sources = asyncio.run(capture_page_and_img_src(url, _SCREENSHOT))
 
-    llm = ChatOpenAI(model="o3")
+    llm = build_llm()
 
     # Getting the Base64 string
-    base64_image = encode_image("assets/screenshot-of-page-to-clone.png")
+    base64_image = encode_image(_SCREENSHOT)
 
-    print(f"Making our call to o3 vision right now")
+    _node_logger.info("Calling vision LLM to clone webpage")
     
     response = llm.invoke([
         SystemMessage(content="""
@@ -103,22 +121,44 @@ No extra markdown, no explanations, no leading or trailing whitespace outside th
         ])
     ])
 
-    with open("/Users/kodykendall/SoftEngineering/LLMPress/Simple/LlamaBotSimple/page.html", "w") as f:
+    with open(_PAGE_HTML, "w") as f:
         f.write(response.content)
-    
+
     return "Cloned webpage written to file"
 
 # Global tools list
 tools = [write_html, write_css, write_javascript, get_screenshot_and_html_content_using_playwright]
 
 # System message
-sys_msg = SystemMessage(content="You are a helpful software_developer_assistant tasked with writing HTML, CSS, and JavaScript code to files. HTML is always written first, then CSS, then JavaScript. CSS will be written to assets/page.css and JavaScript will be written to assets/page.js, reference them accordingly in your generated code. If you are cloning a webpage, you will just write the final output directly into the single HTML page including the CSS and JavaScript in that single file.")
+sys_msg = SystemMessage(content="You are a helpful software_developer_assistant tasked with writing " \
+"HTML, CSS, and JavaScript code to files. HTML is always written first, then CSS, then JavaScript. " \
+"CSS will be written to assets/page.css and JavaScript will be written to assets/page.js, " \
+"reference them accordingly in your generated code. If you are cloning a webpage, " \
+"you will just write the final output directly into the single HTML page including " \
+"the CSS and JavaScript in that single file.")
 
 # Node
-def software_developer_assistant(state: MessagesState):
-   llm = ChatOpenAI(model="o4-mini")
-   llm_with_tools = llm.bind_tools(tools)
-   return {"messages": [llm_with_tools.invoke([sys_msg] + state["messages"])]}
+def software_developer_assistant(state: MessagesState, config: RunnableConfig = None):
+    llm = build_llm()
+    llm_with_tools = llm.bind_tools(tools)
+
+    input_messages = [sys_msg] + state["messages"]
+
+    # Log LLM input via run logger if one is active for this request
+    request_id = (config or {}).get("configurable", {}).get("request_id")
+    run_log = _run_logger_module.get(request_id) if request_id else None
+    if run_log:
+        run_log.log_llm_input(input_messages)
+    else:
+        _node_logger.info(f"LLM input: {len(input_messages)} messages (no run logger active)")
+
+    time.sleep(20)
+    response = llm_with_tools.invoke(input_messages)
+
+    if run_log:
+        _node_logger.info(f"[{request_id}] LLM responded — logging output")
+
+    return {"messages": [response]}
 
 def build_workflow(checkpointer=None):
     # Graph

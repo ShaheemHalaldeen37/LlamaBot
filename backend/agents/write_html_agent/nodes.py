@@ -1,6 +1,6 @@
 from typing import Annotated
 
-from langchain_openai import ChatOpenAI
+from langchain_google_genai import ChatGoogleGenerativeAI
 from typing_extensions import TypedDict
 
 from langgraph.graph import StateGraph, START
@@ -10,7 +10,7 @@ from agents.write_html_agent.route_initial_user_message import route_initial_use
 from agents.write_html_agent.respond_naturally import respond_naturally_node
 from agents.write_html_agent.design_and_plan import design_and_plan_node
 from agents.write_html_agent.write_html_code import write_html_code_node
-from langchain.schema import HumanMessage
+from langchain_core.messages import HumanMessage
 
 from agents.write_html_agent.state import State
 
@@ -21,7 +21,7 @@ load_dotenv()
 def build_workflow():
     graph_builder = StateGraph(State)
 
-    llm = ChatOpenAI(model="o4-mini")
+    llm = ChatGoogleGenerativeAI(model="gemini-2.5-flash")
 
     # The first argument is the unique node name
     # The second argument is the function or object that will be called whenever

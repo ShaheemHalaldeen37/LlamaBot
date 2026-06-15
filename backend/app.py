@@ -2,12 +2,15 @@ from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
-from langchain_openai import ChatOpenAI
-from langchain.schema import HumanMessage
+from langchain_core.messages import HumanMessage
+from langchain_core.messages import messages_to_dict
 from pydantic import BaseModel
 from dotenv import load_dotenv
 import os
 import logging
+
+_PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..")) #Project root LLAMABOT
+_PAGE_HTML = os.path.join(_PROJECT_ROOT, "page.html")#LLAMABOT/page.html
 import time
 import json
 from datetime import datetime
@@ -16,8 +19,8 @@ from langgraph.checkpoint.postgres import PostgresSaver
 from langgraph.checkpoint.memory import MemorySaver
 from langgraph.checkpoint.base import CheckpointTuple
 from psycopg_pool import ConnectionPool
-
-from langsmith import Client
+from run_logger import RunLogger
+from llm_provider import build_llm
 
 # Configure logging
 logging.basicConfig(
@@ -35,10 +38,14 @@ load_dotenv()
 
 app = FastAPI()
 
-# Add CORS middleware for React frontend
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3001", "http://127.0.0.1:3001"],  # React dev server
+    allow_origins=[
+        "http://localhost:8000",
+        "http://127.0.0.1:8000",
+        "http://localhost:3001",
+        "http://127.0.0.1:3001",
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -46,13 +53,10 @@ app.add_middleware(
 
 # Mount static directories
 app.mount("/assets", StaticFiles(directory="../assets"), name="assets")
+app.mount("/examples", StaticFiles(directory="../examples"), name="examples")
 
-# Initialize the ChatOpenAI client
-llm = ChatOpenAI(
-    model="o4-mini-2025-04-16"
-)
-
-client = Client(api_key=os.getenv("LANGSMITH_API_KEY"))
+# Initialize the LLM provider chain (gpt-oss → gemini fallback)
+llm = build_llm()
 
 # Pydantic model for chat request
 class ChatMessage(BaseModel):
@@ -96,100 +100,113 @@ async def chat_message(chat_message: ChatMessage):
     
     # Get the existing HTML content from page.html
     try:
-        with open("../page.html", "r") as f:
+        with open(_PAGE_HTML, "r") as f:
             existing_html_content = f.read()
     except FileNotFoundError:
         existing_html_content = ""
 
     # Define a generator function to stream the response
     async def response_generator():
+        thread_id = chat_message.thread_id or "5"
+        run_log = RunLogger(request_id, chat_message.message, thread_id)
+        run_log.log_existing_html(existing_html_content)
+
         try:
             logger.info(f"[{request_id}] Starting streaming response")
+            yield json.dumps({"type": "start", "request_id": request_id}) + "\n"
 
-            # Initial response with request ID
-            yield json.dumps({
-                "type": "start",
-                "request_id": request_id
-            }) + "\n"
-
-            # Use the provided thread_id or default to "5"
-            thread_id = chat_message.thread_id or "5"
             logger.info(f"[{request_id}] Using thread_id: {thread_id}")
-            
+
             checkpointer = get_or_create_checkpointer()
             graph = build_workflow(checkpointer=checkpointer)
-            stream = graph.stream({
-                "messages": [HumanMessage(content=chat_message.message)],
-                "initial_user_message": chat_message.message,
-                "existing_html_content": existing_html_content
-                }, 
-                config={"configurable": {"thread_id": thread_id}},
-                stream_mode=["updates", "messages"] # "values" is the third option ( to return the entire state object )
-            ) 
+            stream = graph.stream(
+                {
+                    "messages": [HumanMessage(content=chat_message.message)],
+                    "initial_user_message": chat_message.message,
+                    "existing_html_content": existing_html_content,
+                },
+                config={"configurable": {"thread_id": thread_id, "request_id": request_id}},
+                stream_mode=["updates", "messages"],
+            )
 
-            # Track the final state to serialize at the end
             final_state = None
 
-            # Stream each chunk
             for chunk in stream:
-                if chunk is not None:
+                if chunk is None:
+                    continue
 
-                    is_this_chunk_an_llm_message = isinstance(chunk, tuple) and len(chunk) == 2 and chunk[0] == 'messages'
-                    is_this_chunk_an_update_stream_type = isinstance(chunk, tuple) and len(chunk) == 2 and chunk[0] == 'updates'
+                is_llm_message = isinstance(chunk, tuple) and len(chunk) == 2 and chunk[0] == "messages"
+                is_update = isinstance(chunk, tuple) and len(chunk) == 2 and chunk[0] == "updates"
 
-                    if is_this_chunk_an_llm_message: ## If this is a message from the LLM. (Known as a 'Messages' Chunk streaming from LangGraph
+                if is_llm_message:
+                    message_from_llm = chunk[1][0]
+                    langgraph_node_info = chunk[1][1]
+                    node_name = langgraph_node_info["langgraph_node"]
 
-                        # Get the langgraph_node_info.
-                        langgraph_node_info = chunk[1][1] # this is dict object with keys => dict_keys(['langgraph_step', 'langgraph_node', 'langgraph_triggers', 'langgraph_path', 'langgraph_checkpoint_ns', 'checkpoint_ns', 'ls_provider', 'ls_model_name', 'ls_model_type', 'ls_temperature'])
-                        
-                        # Get the AI message from the LLM.
-                        message_from_llm = chunk[1][0] #AIMessageChunk object -> https://python.langchain.com/api_reference/core/messages/langchain_core.messages.ai.AIMessageChunk.html
+                    logger.info(f"[{request_id}] token from {node_name}: {str(message_from_llm.content)[:80]}")
 
-                        # Handle tuple format (node, value)
-                        node, value = chunk
-                        if value is not None:
-                            # Log the streaming output
-                            logger.info(f"[{request_id}] Stream update from {langgraph_node_info['langgraph_node']}: {str(message_from_llm)[:100]}...")
+                    yield json.dumps({
+                        "type": "update",
+                        "node": node_name,
+                        "value": str(message_from_llm.content),
+                    }) + "\n"
 
-                            # Send streaming update for React frontend
-                            yield json.dumps({
-                                "type": "update",
-                                "node": langgraph_node_info['langgraph_node'],
-                                "value": str(message_from_llm.content)  # Convert value to string for safety
-                            }) + "\n"
-                    
-                    elif is_this_chunk_an_update_stream_type:
-                        updated_langgraph_state_object = chunk[1] # Dict object
-                        
-                        node_step_name = list(chunk[1].keys())[-1] # will be one of the following:'route_initial_user_message', 'respond_naturally', 'design_and_plan', 'write_html_code'
-                        
-                        node, value = chunk
-                        if updated_langgraph_state_object is not None:
-                            # Log the streaming output
-                            logger.info(f"[{request_id}] Stream update from {node}: {str(value)[:100]}...")
+                elif is_update:
+                    updated_state = chunk[1]
 
-                            # Store final state for the final response
-                            if 'messages' in updated_langgraph_state_object:
-                                final_state = updated_langgraph_state_object
+                    for node_name, node_output in updated_state.items():
+                        messages = node_output.get("messages", []) if isinstance(node_output, dict) else []
 
-                    else:
-                        # Handle other formats or just log
-                        logger.info(f"[{request_id}] Received chunk in unknown format: {type(chunk)}")
+                        for msg in messages:
+                            msg_type = type(msg).__name__
+
+                            if msg_type == "AIMessage":
+                                # LLM finished a full response — log its output
+                                run_log.log_llm_output(msg)
+
+                            elif msg_type == "ToolMessage":
+                                # Tool finished — log the result
+                                run_log.log_tool_result(
+                                    tool_name=getattr(msg, "name", "unknown_tool"),
+                                    result=str(msg.content),
+                                )
+
+                        logger.info(f"[{request_id}] update from {node_name}: {str(node_output)[:100]}")
+
+                    if "messages" in (list(updated_state.values()) or [{}])[0] if updated_state else False:
+                        final_state = updated_state
+                    # Track final state from any node that has messages
+                    for node_output in updated_state.values():
+                        if isinstance(node_output, dict) and "messages" in node_output:
+                            final_state = node_output
+                            break
+
+                else:
+                    logger.info(f"[{request_id}] unknown chunk format: {type(chunk)}")
+
         except Exception as e:
-            logger.error(f"[{request_id}] Error in stream: {str(e)}", exc_info=True)
-            yield json.dumps({
-                "type": "error",
-                "error": str(e),
-                "request_id": request_id
-            }) + "\n"
+            err_str = str(e)
+            logger.error(f"[{request_id}] Error in stream: {err_str}", exc_info=True)
+
+            if "503" in err_str or "UNAVAILABLE" in err_str or "429" in err_str:
+                run_log.log_gemini_error(err_str)
+            else:
+                run_log.log_general_error(err_str)
+
+            yield json.dumps({"type": "error", "error": err_str, "request_id": request_id}) + "\n"
+
         finally:
-            logger.info(f"[{request_id}] Stream completed")
-            # Send final update with complete messages
+            run_log.log_completion()
+            run_log.close()
+            logger.info(f"[{request_id}] Stream completed. Log → {run_log.log_path}")
+            serializable_messages = messages_to_dict(
+                final_state.get("messages", []) if final_state else []
+            )
             yield json.dumps({
                 "type": "final",
                 "node": "final",
                 "value": "final",
-                "messages": final_state.get("messages", []) if final_state else []
+                "messages": serializable_messages,
             }) + "\n"
 
     # Return a streaming response
@@ -205,7 +222,7 @@ async def chat():
 
 @app.get("/page", response_class=HTMLResponse)
 async def page():
-    with open("../page.html") as f:
+    with open(_PAGE_HTML) as f:
         return f.read()
     
 @app.get("/conversations", response_class=HTMLResponse)
